@@ -1,3 +1,18 @@
+use std::ops::Range;
+
+/// The reason why a string is invalid.
+#[derive(Clone, Debug, PartialEq)]
+pub enum InvalidStrType {
+    /// The end of the file was found before a closing quote.
+    UnclosedEOF,
+
+    /// The end of the line was found before a closing quote.
+    UnclosedLine,
+
+    /// There was no opening brace in a Unicode character code escape: `\x{0000}`.
+    NoOpeningBraceUnicodeEscape,
+}
+
 /// Types of tokens that may be emitted by the Flycatcher lexer.  At this phase, tokens consist of
 /// white spaces, line breaks, comments, punctuators and literals.  Keywords do not exist in this
 /// phase, they are just identifiers.
@@ -24,6 +39,18 @@ pub enum Token {
 
     /// A punctuator, such as a mathematic operator.
     Punctuator,
+
+    /// A string literal.  Strings may start and end with `"` or `'`.
+    Str,
+
+    /// An string literal which either never ends, or does not end on the same line.
+    InvalidStr {
+        /// The reason why the string is invalid.
+        ty: InvalidStrType,
+
+        /// The location where the error occurred.
+        error_loc: Range<usize>,
+    },
 }
 
 impl Token {

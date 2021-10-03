@@ -3,7 +3,7 @@ mod token;
 
 pub use chars::{is_iden_continue, is_iden_start, is_line_term, is_punctuator, is_white_space};
 use std::ops::Range;
-pub use token::Token;
+pub use token::{InvalidStrType, Token};
 
 /// A lexer for Flycatcher source.  This lexer leverages the Unicode character set standard, and allows
 /// any valid Unicode text as source.
@@ -72,7 +72,7 @@ impl Iterator for Lexer {
 
         // Before we do any lexing magic, we need to make sure that the `start_index` is within the
         // range of the source string.  Otherwise, there will be an unwanted overflow panic.
-        if start_index > self.chars.len() {
+        if start_index >= self.chars.len() {
             // `None` in an iterator is returned when there is nothing left to iterate.
             return None;
         }
@@ -160,6 +160,74 @@ impl Iterator for Lexer {
             // token.
             self.loc = start_index..start_index + 1;
             return Some(Token::Punctuator);
+        } else if start_char == '"' || start_char == '\'' {
+            // Alright, if the program lands here, the current token is a string.  We'll use the
+            // `start_char` to find the end of the string.
+            let mut pos = start_index + 1;
+
+            while pos < self.chars.len() {
+                // In this loop, we need to check if the current character is the correct character to
+                // end the string.  We also need to skip over escaped characters.
+
+                let str_char = self.chars[pos];
+
+                if str_char == start_char {
+                    // The string has ended.
+
+                    pos += 1;
+
+                    self.loc = start_index..pos;
+                    return Some(Token::Str);
+                } else if is_line_term(str_char) {
+                    // If we land here, the string did not end before a new line character was found.
+                    // This makes the string invalid.
+
+                    self.loc = start_index..pos;
+                    return Some(Token::InvalidStr {
+                        ty: InvalidStrType::UnclosedLine,
+                        error_loc: pos - 1..pos,
+                    });
+                } else if str_char == '\\' {
+                    // The current character in the string is escaped, but we'll need to see if it is a
+                    // Unicode escape, or a normal escaped character.
+
+                    pos += 1; // move to the escaped character.
+
+                    // Before we do anything, we need to confirm that the string is still valid, and
+                    // the next character (the character code) exists.
+                    if pos >= self.chars.len() {
+                        // There wasn't a closing quote before the file ended.
+                        self.loc = start_index..pos;
+                        return Some(Token::InvalidStr {
+                            ty: InvalidStrType::UnclosedEOF,
+                            error_loc: pos - 1..pos,
+                        });
+                    } else if is_line_term(self.chars[pos]) {
+                        // The string doesn't end on the line that it starts.
+                        self.loc = start_index..pos;
+                        return Some(Token::InvalidStr {
+                            ty: InvalidStrType::UnclosedLine,
+                            error_loc: pos - 1..pos,
+                        });
+                    }
+
+                    // At this phase in the language, we don't have to actually calculate any of the
+                    // character codes, we can simply skip over the next character.  The loop will
+                    // verify that the string is valid.
+                    pos += 1;
+                } else {
+                    // The current character is just a normal string character.
+                    pos += 1;
+                }
+            }
+
+            self.loc = start_index..pos;
+
+            // If we get here, the string never ended.
+            return Some(Token::InvalidStr {
+                ty: InvalidStrType::UnclosedEOF,
+                error_loc: pos - 1..pos,
+            });
         }
 
         // If the program lands here, we can safely assume that no valid token was found.  This means
@@ -170,5 +238,22 @@ impl Iterator for Lexer {
         // the invalid token.
         self.loc = start_index..start_index + 1;
         return Some(Token::Invalid);
+    }
+}
+
+#[test]
+fn test() {
+    let mut lexer = Lexer::new("'hello, world!".to_string());
+    //dbg!(lexer.collect::<Vec<Token>>());
+
+    loop {
+        let item = lexer.next();
+
+        if item == None {
+            break;
+        }
+
+        let loc = lexer.loc();
+        println!("{:#?}@{}:{} '{}'", item, loc.start, loc.end, lexer.slice());
     }
 }

@@ -104,7 +104,7 @@ impl Iterator for Lexer {
             // If the program lands here, the current token is a line terminator.  The process for line
             // termination is exactly the same as the process for white space characters, as seen above.
             self.loc = start_index..start_index + 1;
-            return Some(Token::WhiteSpace);
+            return Some(Token::LineTerm);
         } else if is_punctuator(start_char) {
             // We do punctuators next.  Punctuators are essentially symbols that have some sort of
             // semantic use.
@@ -221,6 +221,8 @@ impl Iterator for Lexer {
                 }
             }
 
+            println!("TEST");
+
             self.loc = start_index..pos;
 
             // If we get here, the string never ended.
@@ -243,7 +245,7 @@ impl Iterator for Lexer {
 
 #[test]
 fn test() {
-    let mut lexer = Lexer::new("'hello, world!".to_string());
+    let mut lexer = Lexer::new("/// Hello, world!\n".to_string());
     //dbg!(lexer.collect::<Vec<Token>>());
 
     loop {

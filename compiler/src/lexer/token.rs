@@ -41,7 +41,14 @@ pub enum Token {
     Punctuator,
 
     /// A string literal.  Strings may start and end with `"` or `'`.
-    Str,
+    Str {
+        /// The prefix before the string literal, such as:
+        /// 
+        /// ```flycatcher
+        /// r'Hello, world!'
+        /// ```
+        prefix: Option<String>,
+    },
 
     /// An string literal which either never ends, or does not end on the same line.
     InvalidStr {

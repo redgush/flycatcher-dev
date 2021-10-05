@@ -1,3 +1,5 @@
+//! Provides utilities for tokenizing, or lexing, Flycatcher source.
+
 mod chars;
 mod token;
 
@@ -177,7 +179,9 @@ impl Iterator for Lexer {
                     pos += 1;
 
                     self.loc = start_index..pos;
-                    return Some(Token::Str);
+                    return Some(Token::Str {
+                        prefix: None
+                    });
                 } else if is_line_term(str_char) {
                     // If we land here, the string did not end before a new line character was found.
                     // This makes the string invalid.
@@ -221,8 +225,6 @@ impl Iterator for Lexer {
                 }
             }
 
-            println!("TEST");
-
             self.loc = start_index..pos;
 
             // If we get here, the string never ended.
@@ -230,6 +232,29 @@ impl Iterator for Lexer {
                 ty: InvalidStrType::UnclosedEOF,
                 error_loc: pos - 1..pos,
             });
+        } else if is_iden_start(start_char) {
+            // Alright, the next thing we need to tokenize is identifiers.  Identifiers must start with
+            // a Unicode XID character, or an underscore.  An identifier ends when the next character
+            // is no longer an XID continuing character.
+
+            let mut pos = start_index + 1;
+
+            while pos < self.chars.len() {
+                // This checks if the identifier ends at this character or not.
+
+                let iden_char = self.chars[pos];
+
+                if is_iden_continue(iden_char) {
+                    // The current character is an XID continuing character, so we may continue the
+                    // loop.
+                    pos += 1;
+                } else if iden_char == '"' || iden_char == '\'' {
+                    // It looks like the identifier was a string prefix.  String prefixes are simply
+                    // identifiers directly before a string, with no spaces.
+                    //
+                    // This means that we will need to tokenize a string, similar to the process above.
+                }
+            }
         }
 
         // If the program lands here, we can safely assume that no valid token was found.  This means
@@ -245,16 +270,19 @@ impl Iterator for Lexer {
 
 #[test]
 fn test() {
+    // This test prints out all tokens in the lexer, which is initialized below.
     let mut lexer = Lexer::new("/// Hello, world!\n".to_string());
-    //dbg!(lexer.collect::<Vec<Token>>());
 
     loop {
         let item = lexer.next();
 
         if item == None {
+            // If there is no token left in the lexer, then we must end the loop.
             break;
         }
 
+        // Print the token type, starting and ending location, and the slice of the current token.
+        // Currently, this may have some formatting issues with struct enum items.
         let loc = lexer.loc();
         println!("{:#?}@{}:{} '{}'", item, loc.start, loc.end, lexer.slice());
     }
